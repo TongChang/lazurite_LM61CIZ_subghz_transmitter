@@ -1,0 +1,2 @@
+# lazurite_LM61CIZ_subghz_transmitter
+Lazurite SubGHzにて、LM61CIZから温度データを取得し、サブギガ通信で送信するプログラムでございます。
