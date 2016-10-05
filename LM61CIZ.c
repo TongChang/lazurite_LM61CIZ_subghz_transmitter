@@ -1,5 +1,7 @@
 #include "LM61CIZ_ide.h"		// Additional Header
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define TEMPERATURE_PIN A0
 #define LED_PIN 0
@@ -21,9 +23,10 @@ void setup() {
 	// ACK回答を待たない
 	// http://www.lapis-semi.com/lazurite-jp/lazuriteide/8654.html
 	// http://www.lapis-semi.com/lazurite-jp/contents/reference/subghz_setSendMode.html
+	// http://www.lapis-semi.com/lazurite-jp/forums/topic/subghz-send%E3%81%A7%E3%81%AE%E3%82%BF%E3%82%A4%E3%83%A0%E3%82%A2%E3%82%A6%E3%83%88%E5%BE%85%E3%81%A1%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6
 	SubGHz.init();
 	SubGHz.getSendMode(&param);
-//	param.addrType = 4;
+	param.addrType = 4;
 	SubGHz.setSendMode(&param);
 }
 
@@ -56,13 +59,14 @@ int getTemperatureFromSensor(uint8_t pin) {
 void sendData(int temperature) {
 	SUBGHZ_MSG msg;
 	long myAddress;
-	// XXX 固定長だと受信側で制御できないので、動的変数に直す必要がある
-	char send_data[100];
+	// http://simd.jugem.jp/?eid=97
+	char *send_data = NULL;
 
 	myAddress = SubGHz.getMyAddress();
 	
 	// preparing data
-	sprintf(send_data, "{ \"temperature\" : %3d, \"address\" : \"%04x\" }", temperature, myAddress);
+    send_data = (char *)malloc( 100 );
+    sprintf(send_data, "{ \"temperature\" : %3d, \"address\" : \"%04x\" }", temperature, myAddress);
 
 	// Initializing
 	SubGHz.begin(SUBGHZ_CH, SUBGHZ_PANID,  SUBGHZ_100KBPS, SUBGHZ_PWR_20MW);
@@ -72,7 +76,11 @@ void sendData(int temperature) {
 	// http://www.lapis-semi.com/lazurite-jp/lazuriteide/8733.html
 	while(1) {
 		digitalWrite(LED_PIN, LED_OFF);
-		msg = SubGHz.send(SUBGHZ_PANID, PI_GATEWAY_ADDRESS, &send_data, sizeof(send_data), NULL);
+    	// XXX malloc.hがサポートされていないので、malloc_usable_size()は使えない
+    	// http://www.kis-lab.com/serikashiki/C/C03.html
+    	// 結果、strlen()を使った
+    	// http://simd.jugem.jp/?eid=123
+		msg = SubGHz.send(SUBGHZ_PANID, PI_GATEWAY_ADDRESS, send_data, strlen(send_data), NULL);
 		if (msg == SUBGHZ_TX_CCA_FAIL) {
 			// brink
 			digitalWrite(LED_PIN, LED_ON);
@@ -86,6 +94,8 @@ void sendData(int temperature) {
 	
 	SubGHz.msgOut(msg);
 	Serial.println(send_data);
+	free( send_data );
+
 
 	// close
 	SubGHz.close();
